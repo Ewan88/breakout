@@ -5,18 +5,18 @@
     <title>Breakout</title>
     <style>
         * { padding: 0; margin: 0; }
-        canvas { background: #eee; display: block; margin: 0 auto; }
+        canvas { display: block; margin: 0 auto; }
+        body { background: black; }
     </style>
 </head>
 <body>
     <canvas id="myCanvas" width="480" height="320"></canvas>
     <script>
-    
         const canvas = document.getElementById("myCanvas");
         const ctx = canvas.getContext("2d");
 
-        const ball_default_x = canvas.width/2;
-        const ball_default_y = canvas.height-30;
+        const ball_default_x = canvas.width / 2;
+        const ball_default_y = canvas.height - 30;
 
         var paddleHeight = 10;
         var paddleWidth = 75;
@@ -40,22 +40,28 @@
         var paddleSpeed = 7.5;
         var color = "#0095DD"
 
-        var brickRowCount = 3;
+        var brickRowCount = 4;
         var brickColumnCount = 5;
         var brickWidth = 75;
         var brickHeight = 20;
         var brickPadding = 10;
         var brickOffsetTop = 30;
         var brickOffsetLeft = 30;
-
         var bricks = [];
-        for (var c = 0; c < brickColumnCount; c++) {
-            bricks[c] = [];
-            for (var r = 0; r < brickRowCount; r++) {
-                bricks[c][r] = { x: 0, y: 0 };
+        var hitMultiplier = 1;
+        var score = 0;
+        var bricksDestroyed = 0;
+
+        function rebuildBricks() {
+            for (var c = 0; c < brickColumnCount; c++) {
+                bricks[c] = [];
+                for (var r = 0; r < brickRowCount; r++) {
+                    bricks[c][r] = { x: 0, y: 0, hidden: false };
+                }
             }
         }
-
+        rebuildBricks();
+        
         document.addEventListener("keydown", keyDownHandler, false);
         document.addEventListener("keyup", keyUpHandler, false);
 
@@ -77,12 +83,74 @@
             }
         }
 
+        function collisionDetection() {
+            // brick detection
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    let b = bricks[c][r];
+                    if (!b.hidden) {
+                        if (x > b.x && x < b.x + brickWidth && y > b.y && y < b.y + brickHeight) {
+                            distanceY = -distanceY;
+                            color = getRandomColor();
+                            bricks[c][r].hidden = true;
+                            score += 1 * hitMultiplier;
+                            hitMultiplier++;
+                            bricksDestroyed++;
+                            console.log(bricksDestroyed);
+                            if (bricksDestroyed === (brickRowCount * brickColumnCount) - 6) {
+                                // GAME WON
+                                alert(`Score: ${score} \n ${bricksDestroyed} bricks destroyed`);
+                                document.location.reload();
+                                clearInterval(interval);
+                            }
+                        }
+                    }
+                }
+            }
+            // top-bottom edge detection
+            if (y + distanceY < ballRadius) {
+                distanceY = -distanceY;
+            } else if (y + distanceY > canvas.height-ballRadius) {
+                // paddle detection
+                if (x > paddleX && x < paddleX + paddleWidth) {
+                    distanceY = -distanceY;
+                    distanceX += 0.5; // increase speed
+                    distanceY -= 0.5;
+                    hitMultiplier = 1;
+                } else {
+                    // GAME OVER
+                    x = ball_default_x;
+                    y = ball_default_y;
+                    paddleX = paddle_default_x;
+                    paddleY = paddle_default_y;
+                    distanceX = default_dx;
+                    distanceY = default_dy;
+                    rebuildBricks();
+                    score = 0;
+                    hitMultiplier = 1;
+                    bricksDestroyed = 0;
+                    color = "#0095DD";
+                }
+            }
+
+            // left-right edge detection
+            if (x + distanceX > canvas.width-ballRadius || x + distanceX < ballRadius) {
+                distanceX = -distanceX;
+            }
+            if (rightPressed && paddleX < canvas.width - paddleWidth) {
+                paddleX += paddleSpeed;
+            } else if (leftPressed && paddleX > 0) {
+                paddleX -= paddleSpeed;
+            }
+        }
+
         function getRandomColor() {
-            let letters = '0123456789ABCDEF';
+            let letters = '3456789ABCDEF';
             let randomColor = '#';
             for (let i = 0; i < 6; i++) {
-                randomColor += letters[Math.floor(Math.random() * 16)];
+                randomColor += letters[Math.floor(Math.random() * 13)];
             }
+            // console.log(`%c ${randomColor} `, `color: ${randomColor}`);
             return randomColor;
         }
 
@@ -94,73 +162,58 @@
             ctx.closePath();
         }
 
-        function drawPaddle() {
+        function drawPaddle(color) {
             ctx.beginPath();
             ctx.rect(paddleX, paddleY, paddleWidth, paddleHeight);
-            ctx.fillStyle = "#0095DD";
+            ctx.fillStyle = color;
             ctx.fill();
             ctx.closePath();
         }
 
-        function drawBricks() {
+        function drawBricks(color) {
             for (let c = 0; c < brickColumnCount; c++) {
                 for (let r = 0; r < brickRowCount; r++) {
-                    let brickX = (c * (brickWidth + brickPadding)) + brickOffsetLeft;
-                    let brickY = (r * (brickHeight + brickPadding)) + brickOffsetTop;
-                    bricks[c][r].x = brickX;
-                    bricks[c][r].y = brickY;
-                    ctx.beginPath();
-                    ctx.rect(brickX, brickY, brickWidth, brickHeight);
-                    ctx.fillStyle = "#0095DD";
-                    ctx.fill();
-                    ctx.closePath();
+                    if (!bricks[c][r].hidden) {
+                        if (r === 0 || r === brickRowCount - 1 || c == 2 && r === 1 || c == 2 && r == 2) {
+                         if (c === 0 || c === brickColumnCount - 1 ||  r === 1 || r === 2) {
+                                bricks[c][r].hidden = true;
+                                continue;
+                            }
+                        }
+                        let brickX = (c * (brickWidth + brickPadding)) + brickOffsetLeft;
+                        let brickY = (r * (brickHeight + brickPadding)) + brickOffsetTop;
+                        bricks[c][r].x = brickX;
+                        bricks[c][r].y = brickY;
+                        ctx.beginPath();
+                        ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                        ctx.fillStyle = color;
+                        ctx.fill();
+                        ctx.closePath();
+                    }
                 }
             }
+        }
+
+        function drawScore() {
+            ctx.font = "16px Arial";
+            ctx.fillStyle = "white";
+            ctx.fillText("Score: " + score, 8, 20);
+            ctx.fillText("Multiplier: " + hitMultiplier, 8, 36);
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawBall(color);
-            drawPaddle();
-            drawBricks();
+            drawPaddle(color);
+            drawBricks(color);
+            drawScore();
             x += distanceX;
             y += distanceY;
-
-            // top-bottom edge detection
-            if (y + distanceY < ballRadius) {
-                distanceY = -distanceY;
-                color = getRandomColor();
-            }
-            else if (y + distanceY > canvas.height-ballRadius) {
-                if (x > paddleX && x < paddleX + paddleWidth) {
-                    distanceY = -distanceY;
-                    distanceX += 1; // increase speed
-                    distanceY -= 1;
-                } else {
-                    // game over
-                    x = ball_default_x;
-                    y = ball_default_y;
-                    paddleX = paddle_default_x;
-                    paddleY = paddle_default_y;
-                    distanceX = default_dx;
-                    distanceY = default_dy;
-                }
-            }
-
-            // left-right edge detection
-            if (x + distanceX > canvas.width-ballRadius || x + distanceX < ballRadius) {
-                distanceX = -distanceX;
-                color = getRandomColor();
-            }
-            if (rightPressed && paddleX < canvas.width - paddleWidth) {
-                paddleX += paddleSpeed;
-            } else if (leftPressed && paddleX > 0) {
-                paddleX -= paddleSpeed;
-            }
+            collisionDetection();
         }
 
         var interval = setInterval(draw, 10);
    
-   var paddle </script>
+   </script>
 </body>
 </html>
